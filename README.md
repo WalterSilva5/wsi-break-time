@@ -48,6 +48,8 @@ Double-click the tray icon or right-click → Settings to configure:
 
 ## Building from Source
 
+### Development
+
 Requirements:
 - Python 3.9+
 - PyQt6
@@ -57,13 +59,40 @@ pip install -r requirements.txt
 python run.py
 ```
 
-To build the executable:
+### Building Executable
 
+**Automated (Recommended):**
+
+Windows:
+```bash
+build.bat
+```
+
+Linux/macOS:
+```bash
+chmod +x build.sh
+./build.sh
+```
+
+Cross-platform (Python):
+```bash
+python build.py
+python build.py --run  # Build and run
+```
+
+**Manual:**
 ```bash
 pyinstaller build.spec
 ```
 
-The `.exe` will be in the `dist/` folder.
+The executable will be in the `dist/` folder.
+
+The automated scripts will:
+- Check and install dependencies
+- Clean previous builds
+- Run basic tests
+- Build the executable
+- Verify the output
 
 ## Configuration
 
