@@ -1,0 +1,45 @@
+Features & Improvements
+
+High Priority:
+  ☐ Multi-monitor support (overlay on all screens)
+  ☐ Auto-start with Windows (registry integration)
+  ☐ Break statistics dashboard (breaks taken, total time saved)
+  ☐ Customizable break exercises (animated eye exercises, stretches)
+  ☐ Sound alerts (optional audio notification)
+
+Medium Priority:
+  ☐ Pomodoro mode (work/break cycles)
+  ☐ Different break types (micro-breaks, long breaks)
+  ☐ DND mode (pause during fullscreen apps/games)
+  ☐ Custom themes (light/dark mode for overlay)
+  ☐ Productivity insights (track screen time)
+  ☐ Smart scheduling (learn your break patterns)
+
+Low Priority:
+  ☐ Import/export settings
+  ☐ Cloud sync for settings
+  ☐ Multiple profiles (work, gaming, reading)
+  ☐ Integration with calendar (respect meetings)
+  ☐ Stretch reminder videos
+  ☐ Activity tracking (mouse/keyboard idle detection)
+
+Technical:
+  ☐ Add unit tests
+  ☐ CI/CD pipeline for releases
+  ☐ Reduce executable size
+  ☐ Linux/macOS support
+  ☐ Installer (MSI/NSIS)
+  ☐ Auto-update mechanism
+  ☐ Crash reporting
+
+UX:
+  ☐ Better icon design
+  ☐ Onboarding tutorial
+  ☐ Minimize animation
+  ☐ Customizable fonts/colors
+  ☐ Accessibility features (screen reader support)
+
+Bugs:
+  ☐ Test on multiple Windows versions
+  ☐ Handle timezone changes
+  ☐ Verify behavior with sleep/hibernate
