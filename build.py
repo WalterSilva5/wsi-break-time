@@ -10,6 +10,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
+CHECK = "[OK]"
+WARN = "[!]"
+
 
 def run_command(cmd, check=True):
     """Execute a shell command."""
@@ -28,7 +31,7 @@ def check_python():
     if version.major < 3 or (version.major == 3 and version.minor < 9):
         print("ERROR: Python 3.9+ required")
         sys.exit(1)
-    print(f"✓ Python {version.major}.{version.minor}.{version.micro}")
+    print(f"{CHECK} Python {version.major}.{version.minor}.{version.micro}")
 
 
 def install_dependencies():
@@ -39,7 +42,7 @@ def install_dependencies():
     for package in packages:
         try:
             __import__(package.lower().replace("-", "_"))
-            print(f"✓ {package} installed")
+            print(f"{CHECK} {package} installed")
         except ImportError:
             print(f"Installing {package}...")
             if not run_command(f"{sys.executable} -m pip install {package}"):
@@ -56,16 +59,16 @@ def clean_build():
         dir_path = Path(dir_name)
         if dir_path.exists():
             shutil.rmtree(dir_path)
-            print(f"✓ Removed {dir_name}")
+            print(f"{CHECK} Removed {dir_name}")
 
 
 def run_tests():
     """Run basic tests."""
     print("\n[3/5] Running tests...")
     if run_command(f"{sys.executable} -c 'import src.main'", check=False):
-        print("✓ Import test passed")
+        print(f"{CHECK} Import test passed")
     else:
-        print("⚠ Import test failed, but continuing...")
+        print(f"{WARN} Import test failed, but continuing...")
 
 
 def build_executable():
@@ -77,7 +80,7 @@ def build_executable():
         print("ERROR: Build failed")
         sys.exit(1)
 
-    print("✓ Build completed")
+    print(f"{CHECK} Build completed")
 
 
 def verify_build():
@@ -92,8 +95,8 @@ def verify_build():
         sys.exit(1)
 
     size_mb = exe_path.stat().st_size / (1024 * 1024)
-    print(f"✓ Executable: {exe_path}")
-    print(f"✓ Size: {size_mb:.1f} MB")
+    print(f"{CHECK} Executable: {exe_path}")
+    print(f"{CHECK} Size: {size_mb:.1f} MB")
 
     return exe_path
 
