@@ -22,13 +22,21 @@ from overlay import BreakOverlay, MultiScreenOverlay
 class SettingsDialog(QDialog):
     """Diálogo de configurações."""
 
-    def __init__(self, settings: AppSettings, parent=None):
+    def __init__(self, settings: AppSettings, timer_manager: TimerManager = None, parent=None):
         super().__init__(parent)
         self.settings = settings
+        self.timer_manager = timer_manager
         self.setWindowTitle("Configurações - Wsi Break Time")
         self.setMinimumSize(500, 550)
         self._setup_ui()
         self._load_settings()
+
+        # Timer para atualizar informações da próxima pausa
+        if self.timer_manager:
+            self.update_timer = QTimer(self)
+            self.update_timer.timeout.connect(self._update_next_break_info)
+            self.update_timer.start(1000)  # Atualiza a cada segundo
+            self._update_next_break_info()  # Atualização inicial
 
     def _setup_ui(self):
         """Configura a interface do diálogo."""
@@ -57,6 +65,22 @@ class SettingsDialog(QDialog):
 
         interval_group.setLayout(interval_layout)
         breaks_layout.addWidget(interval_group)
+
+        # Grupo: Próxima Pausa (somente se timer estiver disponível)
+        if self.timer_manager:
+            status_group = QGroupBox("Próxima Pausa")
+            status_layout = QFormLayout()
+
+            self.next_break_time_label = QLabel("--:--")
+            self.next_break_time_label.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+            status_layout.addRow("Horário:", self.next_break_time_label)
+
+            self.time_remaining_label = QLabel("--:--")
+            self.time_remaining_label.setFont(QFont("Arial", 12))
+            status_layout.addRow("Tempo restante:", self.time_remaining_label)
+
+            status_group.setLayout(status_layout)
+            breaks_layout.addWidget(status_group)
 
         # Grupo: Notificações
         notify_group = QGroupBox("Notificações")
@@ -240,6 +264,46 @@ class SettingsDialog(QDialog):
         """Carrega a mensagem selecionada no campo de edição."""
         self.message_edit.setPlainText(item.text())
 
+    def _update_next_break_info(self):
+        """Atualiza as informações da próxima pausa."""
+        # Verifica se os labels existem (só existem se timer_manager foi passado)
+        if not hasattr(self, 'next_break_time_label'):
+            return
+
+        if not self.timer_manager or not self.timer_manager.is_running:
+            self.next_break_time_label.setText("Timer pausado")
+            self.time_remaining_label.setText("--:--")
+            return
+
+        if self.timer_manager.is_on_break:
+            self.next_break_time_label.setText("Em pausa agora")
+            self.time_remaining_label.setText("--:--")
+            return
+
+        # Obtém o tempo restante
+        remaining = self.timer_manager.get_time_until_break()
+        total_seconds = int(remaining.total_seconds())
+
+        if total_seconds > 0:
+            minutes = total_seconds // 60
+            seconds = total_seconds % 60
+            self.time_remaining_label.setText(f"{minutes:02d}:{seconds:02d}")
+        else:
+            self.time_remaining_label.setText("00:00")
+
+        # Obtém o horário da próxima pausa
+        if self.timer_manager.next_break_time:
+            next_time = self.timer_manager.next_break_time.strftime("%H:%M:%S")
+            self.next_break_time_label.setText(next_time)
+        else:
+            self.next_break_time_label.setText("--:--")
+
+    def closeEvent(self, event):
+        """Chamado quando o diálogo é fechado."""
+        if hasattr(self, 'update_timer'):
+            self.update_timer.stop()
+        super().closeEvent(event)
+
     def get_settings(self) -> AppSettings:
         """Retorna as configurações editadas."""
         self.settings.break_interval = self.break_interval_spin.value()
@@ -385,7 +449,7 @@ class WsiBreakTimeApp:
 
     def _show_settings(self):
         """Abre o diálogo de configurações."""
-        dialog = SettingsDialog(self.settings)
+        dialog = SettingsDialog(self.settings, self.timer)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.settings = dialog.get_settings()
             self.settings_manager.settings = self.settings
