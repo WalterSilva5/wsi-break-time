@@ -2,6 +2,18 @@
 
 Windows app that reminds you to take breaks while working on your computer. Simple, effective, and lives in your system tray.
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/1.png" width="400" alt="System tray icon">
+  <img src="docs/2.png" width="400" alt="Break screen">
+</p>
+
+<p align="center">
+  <img src="docs/3.png" width="400" alt="Settings">
+  <img src="docs/4.png" width="400" alt="Configuration">
+</p>
+
 ## Why?
 
 Extended screen time causes eye strain, back pain, and fatigue. This tool interrupts you at regular intervals with a fullscreen overlay forcing you to actually take a break.
