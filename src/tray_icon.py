@@ -18,6 +18,7 @@ class TrayIcon(QObject):
     skip_requested = pyqtSignal()
     take_break_now_requested = pyqtSignal()
     quit_requested = pyqtSignal()
+    complete_todo_requested = pyqtSignal(str)  # Emite todo_id
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -76,6 +77,12 @@ class TrayIcon(QObject):
         self.status_action = QAction("Próxima pausa em: --:--", self.menu)
         self.status_action.setEnabled(False)
         self.menu.addAction(self.status_action)
+
+        self.menu.addSeparator()
+
+        # TODOs submenu
+        self.todos_menu = self.menu.addMenu("TODOs Pendentes")
+        self._update_todos_menu_empty()
 
         self.menu.addSeparator()
 
@@ -169,3 +176,32 @@ class TrayIcon(QObject):
             self.status_action.setText("Em pausa...")
             self.tray_icon.setIcon(self._create_default_icon("#2196F3"))  # Azul
             self.tray_icon.setToolTip("Wsi Break Time - Descanse seus olhos")
+
+    def _update_todos_menu_empty(self):
+        """Configura menu de TODOs vazio."""
+        self.todos_menu.clear()
+        no_todos_action = QAction("Nenhum TODO pendente", self.todos_menu)
+        no_todos_action.setEnabled(False)
+        self.todos_menu.addAction(no_todos_action)
+
+    def update_todos_menu(self, pending_todos: list):
+        """Atualiza o submenu de TODOs pendentes."""
+        self.todos_menu.clear()
+
+        if not pending_todos:
+            self._update_todos_menu_empty()
+            return
+
+        for todo in pending_todos:
+            time_str = f" [{todo.scheduled_time}]" if todo.scheduled_time else ""
+            recurring_icon = "[R] " if todo.is_recurring else ""
+            action = QAction(f"{recurring_icon}{todo.title}{time_str}", self.todos_menu)
+            # Usar lambda com valor padrão para capturar o id corretamente
+            action.triggered.connect(lambda checked, tid=todo.id: self.complete_todo_requested.emit(tid))
+            self.todos_menu.addAction(action)
+
+        self.todos_menu.addSeparator()
+
+        manage_action = QAction("Gerenciar TODOs...", self.todos_menu)
+        manage_action.triggered.connect(self.show_settings_requested.emit)
+        self.todos_menu.addAction(manage_action)

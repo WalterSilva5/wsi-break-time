@@ -35,6 +35,7 @@ class AppSettings:
     postpone_minutes: int = 5
     water_reminder_interval: int = 0
     play_sound: bool = False
+    todos: List[dict] = field(default_factory=list)  # Lista de TODOs serializados
 
 
 class SettingsManager:
@@ -80,4 +81,14 @@ class SettingsManager:
     def reset_to_defaults(self):
         """Restaura as configurações padrão."""
         self.settings = AppSettings()
+        self.save()
+
+    def get_todos(self) -> list:
+        """Retorna a lista de TODOs como objetos TodoItem."""
+        from todo_model import TodoItem
+        return [TodoItem.from_dict(d) for d in self.settings.todos]
+
+    def save_todos(self, todos: list):
+        """Salva a lista de TODOs."""
+        self.settings.todos = [t.to_dict() for t in todos]
         self.save()
