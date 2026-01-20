@@ -4,30 +4,127 @@ Integra todos os componentes: timer, tray, overlay e configurações.
 """
 
 import random
+from typing import List, Optional
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QSpinBox, QCheckBox, QTextEdit, QPushButton, QGroupBox,
     QFormLayout, QTabWidget, QWidget, QSystemTrayIcon,
-    QListWidget, QListWidgetItem, QMessageBox
+    QListWidget, QListWidgetItem, QMessageBox, QTimeEdit, QLineEdit
 )
-from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtCore import QTimer, Qt, QTime
 from PyQt6.QtGui import QFont
 
 from settings import SettingsManager, AppSettings
 from timer_manager import TimerManager
 from tray_icon import TrayIcon
 from overlay import BreakOverlay, MultiScreenOverlay
+from todo_model import TodoItem, TodoStatus
+from todo_manager import TodoManager
+
+
+class TodoVerificationDialog(QDialog):
+    """Diálogo para verificação de código ao completar TODO recorrente."""
+
+    def __init__(self, todo: TodoItem, verification_code: str, parent=None):
+        super().__init__(parent)
+        self.todo = todo
+        self.verification_code = verification_code
+        self.setWindowTitle("Completar TODO")
+        self.setMinimumSize(400, 280)
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+
+        # Title
+        title_label = QLabel(f"Completar: {self.todo.title}")
+        title_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title_label)
+
+        # Description (if any)
+        if self.todo.description:
+            desc_label = QLabel(self.todo.description)
+            desc_label.setWordWrap(True)
+            desc_label.setStyleSheet("color: gray;")
+            layout.addWidget(desc_label)
+
+        layout.addSpacing(20)
+
+        # Verification code display
+        code_group = QGroupBox("Digite o código abaixo para confirmar")
+        code_layout = QVBoxLayout()
+
+        code_display = QLabel(self.verification_code)
+        code_display.setFont(QFont("Consolas", 24, QFont.Weight.Bold))
+        code_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        code_display.setStyleSheet("""
+            QLabel {
+                background-color: #f0f0f0;
+                border: 2px solid #ccc;
+                border-radius: 8px;
+                padding: 15px;
+                letter-spacing: 5px;
+            }
+        """)
+        code_layout.addWidget(code_display)
+
+        self.code_input = QLineEdit()
+        self.code_input.setPlaceholderText("Digite o código aqui...")
+        self.code_input.setFont(QFont("Consolas", 16))
+        self.code_input.setMaxLength(8)
+        self.code_input.textChanged.connect(self._on_text_changed)
+        code_layout.addWidget(self.code_input)
+
+        code_group.setLayout(code_layout)
+        layout.addWidget(code_group)
+
+        # Buttons
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+
+        cancel_btn = QPushButton("Cancelar")
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(cancel_btn)
+
+        self.confirm_btn = QPushButton("Confirmar")
+        self.confirm_btn.setEnabled(False)
+        self.confirm_btn.clicked.connect(self._on_confirm)
+        button_layout.addWidget(self.confirm_btn)
+
+        layout.addLayout(button_layout)
+
+    def _on_text_changed(self, text: str):
+        """Habilita botão quando código está completo."""
+        self.confirm_btn.setEnabled(len(text) == 8)
+
+    def _on_confirm(self):
+        """Verifica código e aceita se correto."""
+        if self.code_input.text().upper() == self.verification_code.upper():
+            self.accept()
+        else:
+            QMessageBox.warning(self, "Código Incorreto",
+                              "O código digitado não confere. Tente novamente.")
+            self.code_input.clear()
+            self.code_input.setFocus()
+
+    def get_entered_code(self) -> str:
+        """Retorna o código digitado."""
+        return self.code_input.text()
 
 
 class SettingsDialog(QDialog):
     """Diálogo de configurações."""
 
-    def __init__(self, settings: AppSettings, timer_manager: TimerManager = None, parent=None):
+    def __init__(self, settings: AppSettings, timer_manager: Optional[TimerManager] = None,
+                 todos: Optional[List[TodoItem]] = None, parent=None):
         super().__init__(parent)
         self.settings = settings
         self.timer_manager = timer_manager
+        self._todos = todos if todos else []
+        self._editing_todo_id = None  # ID do TODO sendo editado
         self.setWindowTitle("Configurações - Wsi Break Time")
-        self.setMinimumSize(500, 550)
+        self.setMinimumSize(500, 600)
         self._setup_ui()
         self._load_settings()
 
@@ -196,6 +293,10 @@ class SettingsDialog(QDialog):
         general_layout.addStretch()
         tabs.addTab(general_tab, "Geral")
 
+        # Tab: TODOs
+        todos_tab = self._setup_todos_tab()
+        tabs.addTab(todos_tab, "TODOs")
+
         layout.addWidget(tabs)
 
         # Botões principais
@@ -304,6 +405,187 @@ class SettingsDialog(QDialog):
             self.update_timer.stop()
         super().closeEvent(event)
 
+    def _setup_todos_tab(self) -> QWidget:
+        """Configura a aba de TODOs."""
+        todos_tab = QWidget()
+        layout = QVBoxLayout(todos_tab)
+
+        # Grupo: Lista de TODOs
+        list_group = QGroupBox("Lista de TODOs")
+        list_layout = QVBoxLayout()
+
+        self.todos_list = QListWidget()
+        self.todos_list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
+        self.todos_list.itemDoubleClicked.connect(self._edit_todo)
+        self.todos_list.itemClicked.connect(self._on_todo_selected)
+        list_layout.addWidget(self.todos_list)
+
+        list_group.setLayout(list_layout)
+        layout.addWidget(list_group)
+
+        # Grupo: Adicionar/Editar TODO
+        edit_group = QGroupBox("Adicionar/Editar TODO")
+        edit_layout = QFormLayout()
+
+        self.todo_title_edit = QLineEdit()
+        self.todo_title_edit.setPlaceholderText("Título do TODO")
+        edit_layout.addRow("Título:", self.todo_title_edit)
+
+        self.todo_description_edit = QTextEdit()
+        self.todo_description_edit.setMaximumHeight(60)
+        self.todo_description_edit.setPlaceholderText("Descrição (opcional)")
+        edit_layout.addRow("Descrição:", self.todo_description_edit)
+
+        self.todo_recurring_check = QCheckBox("TODO Recorrente (diário)")
+        self.todo_recurring_check.toggled.connect(self._on_recurring_toggled)
+        edit_layout.addRow(self.todo_recurring_check)
+
+        self.todo_time_edit = QTimeEdit()
+        self.todo_time_edit.setDisplayFormat("HH:mm")
+        self.todo_time_edit.setTime(QTime(9, 0))  # Default 9:00 AM
+        self.todo_time_edit.setEnabled(False)
+        edit_layout.addRow("Horário agendado:", self.todo_time_edit)
+
+        edit_group.setLayout(edit_layout)
+        layout.addWidget(edit_group)
+
+        # Botões
+        btn_layout = QHBoxLayout()
+
+        self.add_todo_btn = QPushButton("Adicionar")
+        self.add_todo_btn.clicked.connect(self._add_todo)
+        btn_layout.addWidget(self.add_todo_btn)
+
+        self.update_todo_btn = QPushButton("Atualizar Selecionado")
+        self.update_todo_btn.clicked.connect(self._update_todo)
+        self.update_todo_btn.setEnabled(False)
+        btn_layout.addWidget(self.update_todo_btn)
+
+        remove_btn = QPushButton("Remover")
+        remove_btn.clicked.connect(self._remove_todo)
+        btn_layout.addWidget(remove_btn)
+
+        self.clear_form_btn = QPushButton("Limpar")
+        self.clear_form_btn.clicked.connect(self._clear_todo_form)
+        btn_layout.addWidget(self.clear_form_btn)
+
+        layout.addLayout(btn_layout)
+
+        # Dica
+        tip_label = QLabel("TODOs recorrentes exigem código de 8 caracteres para conclusão.\n"
+                          "Duplo clique para editar um TODO.")
+        tip_label.setStyleSheet("color: gray; font-size: 11px;")
+        layout.addWidget(tip_label)
+
+        layout.addStretch()
+
+        # Carrega TODOs existentes
+        self._load_todos()
+
+        return todos_tab
+
+    def _on_recurring_toggled(self, checked: bool):
+        """Habilita/desabilita seleção de horário baseado em recorrência."""
+        self.todo_time_edit.setEnabled(checked)
+
+    def _load_todos(self):
+        """Carrega TODOs na lista."""
+        self.todos_list.clear()
+        for todo in self._todos:
+            status_icon = "[OK]" if todo.status == TodoStatus.COMPLETED.value else "[  ]"
+            recurring_icon = "[R]" if todo.is_recurring else ""
+            time_str = f" {todo.scheduled_time}" if todo.scheduled_time else ""
+            display_text = f"{status_icon} {recurring_icon} {todo.title}{time_str}"
+
+            item = QListWidgetItem(display_text)
+            item.setData(Qt.ItemDataRole.UserRole, todo.id)
+            self.todos_list.addItem(item)
+
+    def _on_todo_selected(self, item: QListWidgetItem):
+        """Habilita botão de atualizar quando um TODO é selecionado."""
+        self.update_todo_btn.setEnabled(True)
+
+    def _add_todo(self):
+        """Adiciona um novo TODO."""
+        title = self.todo_title_edit.text().strip()
+        if not title:
+            QMessageBox.warning(self, "Aviso", "O título é obrigatório.")
+            return
+
+        todo = TodoItem(
+            title=title,
+            description=self.todo_description_edit.toPlainText().strip(),
+            is_recurring=self.todo_recurring_check.isChecked(),
+            scheduled_time=self.todo_time_edit.time().toString("HH:mm") if self.todo_recurring_check.isChecked() else None
+        )
+
+        self._todos.append(todo)
+        self._load_todos()
+        self._clear_todo_form()
+
+    def _update_todo(self):
+        """Atualiza o TODO selecionado."""
+        current_item = self.todos_list.currentItem()
+        if not current_item:
+            return
+
+        title = self.todo_title_edit.text().strip()
+        if not title:
+            QMessageBox.warning(self, "Aviso", "O título é obrigatório.")
+            return
+
+        todo_id = current_item.data(Qt.ItemDataRole.UserRole)
+        for todo in self._todos:
+            if todo.id == todo_id:
+                todo.title = title
+                todo.description = self.todo_description_edit.toPlainText().strip()
+                todo.is_recurring = self.todo_recurring_check.isChecked()
+                todo.scheduled_time = self.todo_time_edit.time().toString("HH:mm") if todo.is_recurring else None
+                break
+
+        self._load_todos()
+        self._clear_todo_form()
+
+    def _remove_todo(self):
+        """Remove o TODO selecionado."""
+        current_item = self.todos_list.currentItem()
+        if not current_item:
+            return
+
+        todo_id = current_item.data(Qt.ItemDataRole.UserRole)
+        self._todos = [t for t in self._todos if t.id != todo_id]
+        self._load_todos()
+        self._clear_todo_form()
+
+    def _edit_todo(self, item: QListWidgetItem):
+        """Carrega TODO selecionado no formulário para edição."""
+        todo_id = item.data(Qt.ItemDataRole.UserRole)
+        for todo in self._todos:
+            if todo.id == todo_id:
+                self.todo_title_edit.setText(todo.title)
+                self.todo_description_edit.setPlainText(todo.description)
+                self.todo_recurring_check.setChecked(todo.is_recurring)
+                if todo.scheduled_time:
+                    h, m = map(int, todo.scheduled_time.split(':'))
+                    self.todo_time_edit.setTime(QTime(h, m))
+                self._editing_todo_id = todo_id
+                self.update_todo_btn.setEnabled(True)
+                break
+
+    def _clear_todo_form(self):
+        """Limpa o formulário de TODO."""
+        self.todo_title_edit.clear()
+        self.todo_description_edit.clear()
+        self.todo_recurring_check.setChecked(False)
+        self.todo_time_edit.setTime(QTime(9, 0))
+        self._editing_todo_id = None
+        self.update_todo_btn.setEnabled(False)
+        self.todos_list.clearSelection()
+
+    def get_todos(self) -> List[TodoItem]:
+        """Retorna a lista de TODOs editada."""
+        return self._todos.copy()
+
     def get_settings(self) -> AppSettings:
         """Retorna as configurações editadas."""
         self.settings.break_interval = self.break_interval_spin.value()
@@ -339,6 +621,10 @@ class WsiBreakTimeApp:
         self.overlay = BreakOverlay()
         self.multi_overlay = MultiScreenOverlay()
 
+        # TODO Manager
+        self.todo_manager = TodoManager()
+        self.todo_manager.set_todos(self.settings_manager.get_todos())
+
         # Timer para atualizar status no tray
         self.status_timer = QTimer()
         self.status_timer.timeout.connect(self._update_tray_status)
@@ -368,6 +654,14 @@ class WsiBreakTimeApp:
         self.overlay.skip_requested.connect(self._skip_break)
         self.overlay.postpone_requested.connect(self._postpone_break)
 
+        # TodoManager -> App
+        self.todo_manager.todo_due.connect(self._on_todo_due)
+        self.todo_manager.todos_changed.connect(self._on_todos_changed)
+        self.todo_manager.verification_required.connect(self._on_verification_required)
+
+        # Tray -> App (TODOs)
+        self.tray.complete_todo_requested.connect(self._on_complete_todo_requested)
+
     def _apply_settings(self):
         """Aplica as configurações ao timer e overlay."""
         self.timer.configure(
@@ -387,7 +681,11 @@ class WsiBreakTimeApp:
         """Inicia a aplicação."""
         self.tray.show()
         self.timer.start()
+        self.todo_manager.start()
         self.status_timer.start()
+
+        # Atualiza menu de TODOs
+        self._on_todos_changed()
 
         # Notificação inicial
         self.tray.show_notification(
@@ -449,12 +747,20 @@ class WsiBreakTimeApp:
 
     def _show_settings(self):
         """Abre o diálogo de configurações."""
-        dialog = SettingsDialog(self.settings, self.timer)
+        dialog = SettingsDialog(
+            self.settings,
+            self.timer,
+            todos=self.todo_manager.get_todos()
+        )
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.settings = dialog.get_settings()
             self.settings_manager.settings = self.settings
             self.settings_manager.save()
             self._apply_settings()
+
+            # Atualiza TODOs
+            self.todo_manager.set_todos(dialog.get_todos())
+            self.settings_manager.save_todos(self.todo_manager.get_todos())
 
             # Reinicia o timer com novas configurações
             was_running = self.timer.is_running
@@ -500,7 +806,38 @@ class WsiBreakTimeApp:
     def _quit(self):
         """Encerra a aplicação."""
         self.timer.stop()
+        self.todo_manager.stop()
         self.status_timer.stop()
         self.overlay.close()
         self.tray.hide()
         QApplication.quit()
+
+    def _on_todo_due(self, todo: TodoItem):
+        """Chamado quando um TODO está pendente no horário."""
+        time_str = f" - {todo.scheduled_time}" if todo.scheduled_time else ""
+        recurring_str = " (recorrente)" if todo.is_recurring else ""
+        self.tray.show_notification(
+            "TODO Pendente",
+            f"{todo.title}{time_str}{recurring_str}",
+            QSystemTrayIcon.MessageIcon.Information,
+            5000
+        )
+
+    def _on_todos_changed(self):
+        """Atualiza o menu do tray quando TODOs mudam."""
+        pending = self.todo_manager.get_pending_todos()
+        self.tray.update_todos_menu(pending)
+
+        # Persiste alterações
+        self.settings_manager.save_todos(self.todo_manager.get_todos())
+
+    def _on_verification_required(self, todo: TodoItem, code: str):
+        """Exibe diálogo de verificação para TODO recorrente."""
+        dialog = TodoVerificationDialog(todo, code)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            entered_code = dialog.get_entered_code()
+            self.todo_manager.verify_and_complete(todo.id, entered_code)
+
+    def _on_complete_todo_requested(self, todo_id: str):
+        """Usuário solicitou completar um TODO via menu do tray."""
+        self.todo_manager.request_completion(todo_id)
