@@ -20,6 +20,11 @@ class TrayIcon(QObject):
     quit_requested = pyqtSignal()
     complete_todo_requested = pyqtSignal(str)  # Emite todo_id
 
+    # Sinais do Pomodoro
+    start_pomodoro_requested = pyqtSignal()
+    confirm_pomodoro_cycle_requested = pyqtSignal()
+    end_pomodoro_requested = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -30,6 +35,8 @@ class TrayIcon(QObject):
         # Estado
         self.is_paused = False
         self.is_on_break = False
+        self.pomodoro_active = False
+        self.pomodoro_waiting_confirmation = False
 
     def _setup_icon(self):
         """Configura o ícone do tray."""
@@ -101,6 +108,28 @@ class TrayIcon(QObject):
         self.skip_action.triggered.connect(self.skip_requested.emit)
         self.skip_action.setVisible(False)
         self.menu.addAction(self.skip_action)
+
+        self.menu.addSeparator()
+
+        # Seção Pomodoro
+        self.pomodoro_separator = self.menu.addSeparator()
+
+        # Iniciar Pomodoro (visível quando inativo)
+        self.start_pomodoro_action = QAction("Iniciar Pomodoro", self.menu)
+        self.start_pomodoro_action.triggered.connect(self.start_pomodoro_requested.emit)
+        self.menu.addAction(self.start_pomodoro_action)
+
+        # Confirmar próximo ciclo (visível quando aguardando confirmação)
+        self.confirm_pomodoro_action = QAction("Iniciar próximo ciclo", self.menu)
+        self.confirm_pomodoro_action.triggered.connect(self.confirm_pomodoro_cycle_requested.emit)
+        self.confirm_pomodoro_action.setVisible(False)
+        self.menu.addAction(self.confirm_pomodoro_action)
+
+        # Encerrar Pomodoro (visível quando ativo)
+        self.end_pomodoro_action = QAction("Encerrar Pomodoro", self.menu)
+        self.end_pomodoro_action.triggered.connect(self.end_pomodoro_requested.emit)
+        self.end_pomodoro_action.setVisible(False)
+        self.menu.addAction(self.end_pomodoro_action)
 
         self.menu.addSeparator()
 
@@ -205,3 +234,37 @@ class TrayIcon(QObject):
         manage_action = QAction("Gerenciar TODOs...", self.todos_menu)
         manage_action.triggered.connect(self.show_settings_requested.emit)
         self.todos_menu.addAction(manage_action)
+
+    def set_pomodoro_state(self, active: bool, waiting_confirmation: bool = False,
+                           status_text: str = None):
+        """Atualiza o estado do Pomodoro no menu."""
+        self.pomodoro_active = active
+        self.pomodoro_waiting_confirmation = waiting_confirmation
+
+        # Visibilidade dos itens
+        self.start_pomodoro_action.setVisible(not active)
+        self.end_pomodoro_action.setVisible(active)
+        self.confirm_pomodoro_action.setVisible(active and waiting_confirmation)
+
+        # Esconde itens de pausa regular quando Pomodoro está ativo
+        self.pause_action.setVisible(not active and not self.is_on_break)
+        self.take_break_action.setVisible(not active and not self.is_on_break)
+
+        # Atualiza status e ícone
+        if active:
+            if status_text:
+                self.status_action.setText(f"Pomodoro: {status_text}")
+            if waiting_confirmation:
+                self.tray_icon.setIcon(self._create_default_icon("#FF9800"))  # Laranja
+                self.tray_icon.setToolTip("Pomodoro - Aguardando confirmação")
+            else:
+                self.tray_icon.setIcon(self._create_default_icon("#E91E63"))  # Rosa/Magenta
+                self.tray_icon.setToolTip("Pomodoro - Ativo")
+        else:
+            self.tray_icon.setIcon(self._create_default_icon("#4CAF50"))  # Verde
+            self.tray_icon.setToolTip("Wsi Break Time - Ativo")
+
+    def update_pomodoro_status(self, status_text: str):
+        """Atualiza apenas o texto de status do Pomodoro."""
+        if self.pomodoro_active:
+            self.status_action.setText(f"Pomodoro: {status_text}")
