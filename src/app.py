@@ -20,6 +20,7 @@ from tray_icon import TrayIcon
 from overlay import BreakOverlay, MultiScreenOverlay
 from todo_model import TodoItem, TodoStatus
 from todo_manager import TodoManager
+from pomodoro_manager import PomodoroManager, PomodoroState
 
 
 class TodoVerificationDialog(QDialog):
@@ -296,6 +297,10 @@ class SettingsDialog(QDialog):
         # Tab: TODOs
         todos_tab = self._setup_todos_tab()
         tabs.addTab(todos_tab, "TODOs")
+
+        # Tab: Pomodoro
+        pomodoro_tab = self._setup_pomodoro_tab()
+        tabs.addTab(pomodoro_tab, "Pomodoro")
 
         layout.addWidget(tabs)
 
@@ -586,6 +591,63 @@ class SettingsDialog(QDialog):
         """Retorna a lista de TODOs editada."""
         return self._todos.copy()
 
+    def _setup_pomodoro_tab(self) -> QWidget:
+        """Configura a aba do Pomodoro."""
+        pomodoro_tab = QWidget()
+        layout = QVBoxLayout(pomodoro_tab)
+
+        # Grupo: Durações
+        durations_group = QGroupBox("Durações")
+        durations_layout = QFormLayout()
+
+        self.pomodoro_work_spin = QSpinBox()
+        self.pomodoro_work_spin.setRange(1, 120)
+        self.pomodoro_work_spin.setSuffix(" minutos")
+        self.pomodoro_work_spin.setValue(self.settings.pomodoro_work_duration)
+        durations_layout.addRow("Trabalho:", self.pomodoro_work_spin)
+
+        self.pomodoro_short_break_spin = QSpinBox()
+        self.pomodoro_short_break_spin.setRange(1, 60)
+        self.pomodoro_short_break_spin.setSuffix(" minutos")
+        self.pomodoro_short_break_spin.setValue(self.settings.pomodoro_short_break)
+        durations_layout.addRow("Pausa curta:", self.pomodoro_short_break_spin)
+
+        self.pomodoro_long_break_spin = QSpinBox()
+        self.pomodoro_long_break_spin.setRange(1, 120)
+        self.pomodoro_long_break_spin.setSuffix(" minutos")
+        self.pomodoro_long_break_spin.setValue(self.settings.pomodoro_long_break)
+        durations_layout.addRow("Pausa longa:", self.pomodoro_long_break_spin)
+
+        self.pomodoro_cycles_spin = QSpinBox()
+        self.pomodoro_cycles_spin.setRange(2, 10)
+        self.pomodoro_cycles_spin.setValue(self.settings.pomodoro_cycles_before_long)
+        durations_layout.addRow("Ciclos antes da pausa longa:", self.pomodoro_cycles_spin)
+
+        durations_group.setLayout(durations_layout)
+        layout.addWidget(durations_group)
+
+        # Explicação
+        info_group = QGroupBox("Como funciona")
+        info_layout = QVBoxLayout()
+
+        info_text = QLabel(
+            "O Pomodoro é uma técnica de produtividade que alterna períodos de trabalho\n"
+            "focado com pausas curtas. Após um número de ciclos, uma pausa longa é feita.\n\n"
+            "1. Inicie o Pomodoro pelo menu do tray\n"
+            "2. Trabalhe durante o período configurado\n"
+            "3. Ao final, confirme para iniciar a pausa ou encerrar\n"
+            "4. Se não confirmar, lembretes serão exibidos a cada 30 segundos"
+        )
+        info_text.setWordWrap(True)
+        info_text.setStyleSheet("color: gray;")
+        info_layout.addWidget(info_text)
+
+        info_group.setLayout(info_layout)
+        layout.addWidget(info_group)
+
+        layout.addStretch()
+        return pomodoro_tab
+
     def get_settings(self) -> AppSettings:
         """Retorna as configurações editadas."""
         self.settings.break_interval = self.break_interval_spin.value()
@@ -604,6 +666,12 @@ class SettingsDialog(QDialog):
         self.settings.break_messages = []
         for i in range(self.messages_list.count()):
             self.settings.break_messages.append(self.messages_list.item(i).text())
+
+        # Pomodoro settings
+        self.settings.pomodoro_work_duration = self.pomodoro_work_spin.value()
+        self.settings.pomodoro_short_break = self.pomodoro_short_break_spin.value()
+        self.settings.pomodoro_long_break = self.pomodoro_long_break_spin.value()
+        self.settings.pomodoro_cycles_before_long = self.pomodoro_cycles_spin.value()
 
         return self.settings
 
@@ -624,6 +692,9 @@ class WsiBreakTimeApp:
         # TODO Manager
         self.todo_manager = TodoManager()
         self.todo_manager.set_todos(self.settings_manager.get_todos())
+
+        # Pomodoro Manager
+        self.pomodoro = PomodoroManager()
 
         # Timer para atualizar status no tray
         self.status_timer = QTimer()
@@ -662,13 +733,36 @@ class WsiBreakTimeApp:
         # Tray -> App (TODOs)
         self.tray.complete_todo_requested.connect(self._on_complete_todo_requested)
 
+        # Pomodoro -> App
+        self.pomodoro.state_changed.connect(self._on_pomodoro_state_changed)
+        self.pomodoro.tick.connect(self._on_pomodoro_tick)
+        self.pomodoro.confirmation_needed.connect(self._on_pomodoro_confirmation_needed)
+        self.pomodoro.reminder_notification.connect(self._on_pomodoro_reminder)
+        self.pomodoro.pomodoro_started.connect(self._on_pomodoro_started)
+        self.pomodoro.pomodoro_ended.connect(self._on_pomodoro_ended)
+        self.pomodoro.break_started.connect(self._on_pomodoro_break_started)
+        self.pomodoro.break_ended.connect(self._on_pomodoro_break_ended)
+
+        # Tray -> App (Pomodoro)
+        self.tray.start_pomodoro_requested.connect(self._start_pomodoro)
+        self.tray.confirm_pomodoro_cycle_requested.connect(self._confirm_pomodoro_cycle)
+        self.tray.end_pomodoro_requested.connect(self._end_pomodoro)
+
     def _apply_settings(self):
-        """Aplica as configurações ao timer e overlay."""
+        """Aplica as configurações ao timer, overlay e pomodoro."""
         self.timer.configure(
             break_interval=self.settings.break_interval,
             break_duration=self.settings.break_duration,
             pre_notification_seconds=self.settings.pre_notification_seconds if self.settings.show_pre_notification else 0,
             water_interval=self.settings.water_reminder_interval
+        )
+
+        # Configura Pomodoro
+        self.pomodoro.configure(
+            work_duration=self.settings.pomodoro_work_duration,
+            short_break_duration=self.settings.pomodoro_short_break,
+            long_break_duration=self.settings.pomodoro_long_break,
+            cycles_before_long_break=self.settings.pomodoro_cycles_before_long
         )
 
     def _get_random_message(self) -> str:
@@ -697,6 +791,10 @@ class WsiBreakTimeApp:
 
     def _update_tray_status(self):
         """Atualiza o status no menu do tray."""
+        # Não atualiza se Pomodoro estiver ativo (tem seu próprio status)
+        if self.pomodoro.is_active:
+            return
+
         if not self.timer.is_on_break:
             remaining = self.timer.get_time_until_break()
             minutes = int(remaining.total_seconds() // 60)
@@ -841,3 +939,99 @@ class WsiBreakTimeApp:
     def _on_complete_todo_requested(self, todo_id: str):
         """Usuário solicitou completar um TODO via menu do tray."""
         self.todo_manager.request_completion(todo_id)
+
+    # Métodos do Pomodoro
+    def _start_pomodoro(self):
+        """Inicia o modo Pomodoro."""
+        if self.pomodoro.is_active:
+            return
+
+        # Pausa o timer regular
+        self.timer.pause()
+        self.status_timer.stop()
+
+        # Inicia o Pomodoro
+        self.pomodoro.start()
+
+    def _confirm_pomodoro_cycle(self):
+        """Confirma o próximo ciclo do Pomodoro."""
+        self.pomodoro.confirm_next_cycle()
+
+    def _end_pomodoro(self):
+        """Encerra o Pomodoro."""
+        self.pomodoro.stop()
+
+        # Retoma o timer regular
+        self.timer.resume()
+        self.tray.set_paused_state(False)
+        self.status_timer.start()
+
+    def _on_pomodoro_started(self):
+        """Chamado quando o Pomodoro inicia."""
+        self.tray.set_pomodoro_state(active=True, waiting_confirmation=False)
+        self.tray.show_notification(
+            "Pomodoro Iniciado",
+            f"Período de trabalho: {self.settings.pomodoro_work_duration} minutos. Foco!",
+            QSystemTrayIcon.MessageIcon.Information,
+            3000
+        )
+
+    def _on_pomodoro_ended(self):
+        """Chamado quando o Pomodoro é encerrado."""
+        self.tray.set_pomodoro_state(active=False)
+        self.tray.show_notification(
+            "Pomodoro Encerrado",
+            f"Você completou {self.pomodoro.cycles_completed} ciclo(s). Bom trabalho!",
+            QSystemTrayIcon.MessageIcon.Information,
+            3000
+        )
+
+    def _on_pomodoro_state_changed(self, state: str):
+        """Chamado quando o estado do Pomodoro muda."""
+        is_waiting = state == PomodoroState.WAITING_CONFIRMATION.value
+        self.tray.set_pomodoro_state(
+            active=self.pomodoro.is_active,
+            waiting_confirmation=is_waiting,
+            status_text=self.pomodoro.get_status_text()
+        )
+
+    def _on_pomodoro_tick(self, seconds_remaining: int):
+        """Atualiza o status a cada segundo durante o Pomodoro."""
+        self.tray.update_pomodoro_status(self.pomodoro.get_status_text())
+
+    def _on_pomodoro_confirmation_needed(self, message: str):
+        """Chamado quando precisa confirmação do usuário."""
+        self.tray.show_notification(
+            "Pomodoro - Ação Necessária",
+            message,
+            QSystemTrayIcon.MessageIcon.Information,
+            10000
+        )
+
+    def _on_pomodoro_reminder(self):
+        """Lembrete a cada 30 segundos se não houver ação."""
+        self.tray.show_notification(
+            "Pomodoro Aguardando",
+            "Clique no ícone do tray para continuar ou encerrar o Pomodoro.",
+            QSystemTrayIcon.MessageIcon.Warning,
+            5000
+        )
+
+    def _on_pomodoro_break_started(self):
+        """Chamado quando uma pausa do Pomodoro inicia."""
+        state = self.pomodoro.state
+        if state == PomodoroState.LONG_BREAK:
+            msg = "Pausa longa! Descanse bem."
+        else:
+            msg = "Pausa curta! Relaxe um pouco."
+
+        self.tray.show_notification(
+            "Pomodoro - Pausa",
+            msg,
+            QSystemTrayIcon.MessageIcon.Information,
+            3000
+        )
+
+    def _on_pomodoro_break_ended(self):
+        """Chamado quando uma pausa do Pomodoro termina."""
+        pass  # A notificação será tratada pelo confirmation_needed

@@ -37,6 +37,12 @@ class AppSettings:
     play_sound: bool = False
     todos: List[dict] = field(default_factory=list)  # Lista de TODOs serializados
 
+    # Configurações do Pomodoro
+    pomodoro_work_duration: int = 25  # minutos
+    pomodoro_short_break: int = 5  # minutos
+    pomodoro_long_break: int = 15  # minutos
+    pomodoro_cycles_before_long: int = 4  # ciclos antes da pausa longa
+
 
 class SettingsManager:
     """Gerenciador de configurações."""
