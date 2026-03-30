@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git rm:*)",
+      "Bash(git mv:*)",
+      "Bash(rm -f Cargo.lock)",
+      "Bash(rm -rf target/)",
+      "Bash(python build.py)"
+    ]
+  }
+}

@@ -12,21 +12,28 @@ block_cipher = None
 # Caminhos
 ROOT_DIR = Path(SPECPATH)
 SRC_DIR = ROOT_DIR / 'src'
-RESOURCES_DIR = ROOT_DIR / 'resources'
+ASSETS_DIR = ROOT_DIR / 'assets'
+
+# Coleta datas condicionalmente
+datas = [
+    (str(SRC_DIR / 'app.py'), '.'),
+    (str(SRC_DIR / 'settings.py'), '.'),
+    (str(SRC_DIR / 'timer_manager.py'), '.'),
+    (str(SRC_DIR / 'tray_icon.py'), '.'),
+    (str(SRC_DIR / 'overlay.py'), '.'),
+    (str(SRC_DIR / 'todo_model.py'), '.'),
+    (str(SRC_DIR / 'todo_manager.py'), '.'),
+    (str(SRC_DIR / 'pomodoro_manager.py'), '.'),
+]
+
+if ASSETS_DIR.exists():
+    datas.append((str(ASSETS_DIR), 'assets'))
 
 a = Analysis(
     [str(SRC_DIR / 'main.py')],
     pathex=[str(ROOT_DIR), str(SRC_DIR)],
     binaries=[],
-    datas=[
-        (str(RESOURCES_DIR / 'icons'), 'resources/icons'),
-        (str(RESOURCES_DIR / 'sounds'), 'resources/sounds'),
-        (str(SRC_DIR / 'app.py'), '.'),
-        (str(SRC_DIR / 'settings.py'), '.'),
-        (str(SRC_DIR / 'timer_manager.py'), '.'),
-        (str(SRC_DIR / 'tray_icon.py'), '.'),
-        (str(SRC_DIR / 'overlay.py'), '.'),
-    ],
+    datas=datas,
     hiddenimports=[
         'PyQt6.QtWidgets',
         'PyQt6.QtCore',
@@ -36,6 +43,9 @@ a = Analysis(
         'timer_manager',
         'tray_icon',
         'overlay',
+        'todo_model',
+        'todo_manager',
+        'pomodoro_manager',
     ],
     hookspath=[],
     hooksconfig={},
@@ -69,5 +79,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=str(RESOURCES_DIR / 'icons' / 'app_icon.ico') if (RESOURCES_DIR / 'icons' / 'app_icon.ico').exists() else None,
+    icon=str(ASSETS_DIR / 'app_icon.ico') if (ASSETS_DIR / 'app_icon.ico').exists() else None,
 )

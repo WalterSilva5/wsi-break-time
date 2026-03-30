@@ -216,6 +216,38 @@ class SettingsDialog(QDialog):
         controls_group.setLayout(controls_layout)
         breaks_layout.addWidget(controls_group)
 
+        # Grupo: Textos de Desafio (captcha para pular)
+        challenge_group = QGroupBox("Texto para pular (captcha)")
+        challenge_layout = QVBoxLayout()
+
+        challenge_desc = QLabel("O usuário precisa digitar o texto exibido para pular a pausa.\n"
+                                "Um texto aleatório da lista será selecionado a cada pausa.")
+        challenge_desc.setWordWrap(True)
+        challenge_desc.setStyleSheet("color: gray; font-size: 11px;")
+        challenge_layout.addWidget(challenge_desc)
+
+        self.challenge_list = QListWidget()
+        self.challenge_list.setMaximumHeight(100)
+        challenge_layout.addWidget(self.challenge_list)
+
+        challenge_input_layout = QHBoxLayout()
+        self.challenge_edit = QLineEdit()
+        self.challenge_edit.setPlaceholderText("Digite um novo texto de desafio...")
+        challenge_input_layout.addWidget(self.challenge_edit)
+
+        challenge_add_btn = QPushButton("Adicionar")
+        challenge_add_btn.clicked.connect(self._add_challenge_text)
+        challenge_input_layout.addWidget(challenge_add_btn)
+
+        challenge_remove_btn = QPushButton("Remover")
+        challenge_remove_btn.clicked.connect(self._remove_challenge_text)
+        challenge_input_layout.addWidget(challenge_remove_btn)
+
+        challenge_layout.addLayout(challenge_input_layout)
+
+        challenge_group.setLayout(challenge_layout)
+        breaks_layout.addWidget(challenge_group)
+
         breaks_layout.addStretch()
         tabs.addTab(breaks_tab, "Pausas")
 
@@ -338,6 +370,11 @@ class SettingsDialog(QDialog):
         for msg in self.settings.break_messages:
             self.messages_list.addItem(msg)
 
+        # Carrega textos de desafio
+        self.challenge_list.clear()
+        for text in self.settings.skip_challenge_texts:
+            self.challenge_list.addItem(text)
+
     def _add_message(self):
         """Adiciona uma nova mensagem à lista."""
         text = self.message_edit.toPlainText().strip()
@@ -369,6 +406,25 @@ class SettingsDialog(QDialog):
     def _edit_message(self, item: QListWidgetItem):
         """Carrega a mensagem selecionada no campo de edição."""
         self.message_edit.setPlainText(item.text())
+
+    def _add_challenge_text(self):
+        """Adiciona um novo texto de desafio."""
+        text = self.challenge_edit.text().strip()
+        if text:
+            self.challenge_list.addItem(text)
+            self.challenge_edit.clear()
+
+    def _remove_challenge_text(self):
+        """Remove o texto de desafio selecionado."""
+        current_row = self.challenge_list.currentRow()
+        if current_row >= 0:
+            if self.challenge_list.count() > 1:
+                self.challenge_list.takeItem(current_row)
+            else:
+                QMessageBox.warning(
+                    self, "Aviso",
+                    "Deve haver pelo menos um texto de desafio na lista."
+                )
 
     def _update_next_break_info(self):
         """Atualiza as informações da próxima pausa."""
@@ -667,6 +723,11 @@ class SettingsDialog(QDialog):
         for i in range(self.messages_list.count()):
             self.settings.break_messages.append(self.messages_list.item(i).text())
 
+        # Coleta textos de desafio
+        self.settings.skip_challenge_texts = []
+        for i in range(self.challenge_list.count()):
+            self.settings.skip_challenge_texts.append(self.challenge_list.item(i).text())
+
         # Pomodoro settings
         self.settings.pomodoro_work_duration = self.pomodoro_work_spin.value()
         self.settings.pomodoro_short_break = self.pomodoro_short_break_spin.value()
@@ -801,18 +862,26 @@ class WsiBreakTimeApp:
             seconds = int(remaining.total_seconds() % 60)
             self.tray.update_status(f"{minutes:02d}:{seconds:02d}")
 
+    def _get_random_challenge_text(self) -> str:
+        """Retorna um texto de desafio aleatório da lista."""
+        if self.settings.skip_challenge_texts:
+            return random.choice(self.settings.skip_challenge_texts)
+        return "mantenha o foco"
+
     def _on_break_started(self):
         """Chamado quando uma pausa inicia."""
         self.tray.set_break_state(True)
 
         # Seleciona mensagem aleatória e configura overlay
         random_message = self._get_random_message()
+        challenge_text = self._get_random_challenge_text()
         self.overlay.configure(
             message=random_message,
             duration=self.settings.break_duration,
             allow_skip=self.settings.allow_skip,
             allow_postpone=self.settings.allow_postpone,
-            postpone_minutes=self.settings.postpone_minutes
+            postpone_minutes=self.settings.postpone_minutes,
+            challenge_text=challenge_text
         )
         self.overlay.show_fullscreen()
 

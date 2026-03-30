@@ -5,7 +5,7 @@ Exibe uma tela escura com mensagem durante as pausas.
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QProgressBar, QApplication
+    QProgressBar, QApplication, QLineEdit
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QScreen
@@ -26,6 +26,7 @@ class BreakOverlay(QWidget):
         self.postpone_minutes = 5
         self.break_message = "Hora de descansar os olhos!\nOlhe para algo a 6 metros de distância."
         self.break_duration = 20
+        self.challenge_text = "mantenha o foco"
 
         self._setup_ui()
         self._setup_window()
@@ -105,32 +106,58 @@ class BreakOverlay(QWidget):
         # Espaçamento
         layout.addSpacing(40)
 
-        # Botões
-        button_layout = QHBoxLayout()
-        button_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        button_layout.setSpacing(20)
+        # Área de skip (captcha)
+        self.skip_container = QWidget()
+        skip_layout = QVBoxLayout(self.skip_container)
+        skip_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Botão Pular
-        self.skip_button = QPushButton("Pular")
-        self.skip_button.setFont(QFont("Segoe UI", 12))
-        self.skip_button.setMinimumSize(120, 40)
-        self.skip_button.setStyleSheet("""
-            QPushButton {
-                background-color: #424242;
+        self.challenge_tip = QLabel("Digite o texto abaixo para pular:")
+        self.challenge_tip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.challenge_tip.setFont(QFont("Segoe UI", 11))
+        self.challenge_tip.setStyleSheet("color: #707070;")
+        skip_layout.addWidget(self.challenge_tip)
+
+        self.challenge_label = QLabel(self.challenge_text)
+        self.challenge_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.challenge_label.setFont(QFont("Consolas", 20, QFont.Weight.Bold))
+        self.challenge_label.setStyleSheet("""
+            color: #FF9800;
+            background-color: rgba(255, 255, 255, 15);
+            border: 1px solid #555;
+            border-radius: 8px;
+            padding: 10px 20px;
+            letter-spacing: 3px;
+        """)
+        skip_layout.addWidget(self.challenge_label, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self.challenge_input = QLineEdit()
+        self.challenge_input.setPlaceholderText("Digite aqui...")
+        self.challenge_input.setFont(QFont("Consolas", 16))
+        self.challenge_input.setMaximumWidth(400)
+        self.challenge_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.challenge_input.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(255, 255, 255, 20);
                 color: white;
-                border: none;
-                border-radius: 20px;
-                padding: 10px 30px;
+                border: 2px solid #555;
+                border-radius: 8px;
+                padding: 8px 15px;
             }
-            QPushButton:hover {
-                background-color: #616161;
-            }
-            QPushButton:pressed {
-                background-color: #757575;
+            QLineEdit:focus {
+                border-color: #FF9800;
             }
         """)
-        self.skip_button.clicked.connect(self.skip_requested.emit)
-        button_layout.addWidget(self.skip_button)
+        self.challenge_input.textChanged.connect(self._on_challenge_text_changed)
+        skip_layout.addWidget(self.challenge_input, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self.challenge_error = QLabel("")
+        self.challenge_error.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.challenge_error.setFont(QFont("Segoe UI", 10))
+        self.challenge_error.setStyleSheet("color: #F44336;")
+        self.challenge_error.hide()
+        skip_layout.addWidget(self.challenge_error)
+
+        layout.addWidget(self.skip_container)
 
         # Botão Adiar
         self.postpone_button = QPushButton(f"Adiar {self.postpone_minutes} min")
@@ -154,31 +181,32 @@ class BreakOverlay(QWidget):
         self.postpone_button.clicked.connect(
             lambda: self.postpone_requested.emit(self.postpone_minutes)
         )
-        button_layout.addWidget(self.postpone_button)
+        layout.addWidget(self.postpone_button, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        layout.addLayout(button_layout)
-
-        # Dica
-        tip_label = QLabel("Pressione ESC para pular")
-        tip_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        tip_label.setFont(QFont("Segoe UI", 10))
-        tip_label.setStyleSheet("color: #505050; margin-top: 30px;")
-        layout.addWidget(tip_label)
+    def _on_challenge_text_changed(self, text: str):
+        """Verifica se o texto digitado confere com o desafio."""
+        if text.strip().lower() == self.challenge_text.strip().lower():
+            self.skip_requested.emit()
 
     def configure(self, message: str, duration: int, allow_skip: bool,
-                  allow_postpone: bool, postpone_minutes: int):
+                  allow_postpone: bool, postpone_minutes: int,
+                  challenge_text: str = "mantenha o foco"):
         """Configura o overlay antes de exibir."""
         self.break_message = message
         self.break_duration = duration
         self.allow_skip = allow_skip
         self.allow_postpone = allow_postpone
         self.postpone_minutes = postpone_minutes
+        self.challenge_text = challenge_text
 
         self.message_label.setText(message)
         self.progress_bar.setMaximum(duration)
         self.progress_bar.setValue(duration)
 
-        self.skip_button.setVisible(allow_skip)
+        self.skip_container.setVisible(allow_skip)
+        self.challenge_label.setText(challenge_text)
+        self.challenge_input.clear()
+        self.challenge_error.hide()
         self.postpone_button.setVisible(allow_postpone)
         self.postpone_button.setText(f"Adiar {postpone_minutes} min")
 
@@ -204,6 +232,8 @@ class BreakOverlay(QWidget):
         self.countdown_label.setText(str(self.break_duration))
         self.progress_bar.setValue(self.break_duration)
         self.countdown_label.setStyleSheet("color: #4CAF50; margin: 20px;")
+        self.challenge_input.clear()
+        self.challenge_error.hide()
 
         self.showFullScreen()
         self.activateWindow()
@@ -211,10 +241,8 @@ class BreakOverlay(QWidget):
 
     def keyPressEvent(self, event):
         """Trata teclas pressionadas."""
-        if event.key() == Qt.Key.Key_Escape and self.allow_skip:
-            self.skip_requested.emit()
-        else:
-            super().keyPressEvent(event)
+        # ESC desabilitado - skip requer digitar o texto desafio
+        super().keyPressEvent(event)
 
 
 class MultiScreenOverlay:
@@ -240,7 +268,7 @@ class MultiScreenOverlay:
                 main_overlay = overlay
             else:
                 # Overlays secundários não têm botões
-                overlay.skip_button.hide()
+                overlay.skip_container.hide()
                 overlay.postpone_button.hide()
 
             self.overlays.append(overlay)
@@ -265,7 +293,9 @@ class MultiScreenOverlay:
         self.overlays = []
 
     def configure_all(self, message: str, duration: int, allow_skip: bool,
-                      allow_postpone: bool, postpone_minutes: int):
+                      allow_postpone: bool, postpone_minutes: int,
+                      challenge_text: str = "mantenha o foco"):
         """Configura todos os overlays."""
         for overlay in self.overlays:
-            overlay.configure(message, duration, allow_skip, allow_postpone, postpone_minutes)
+            overlay.configure(message, duration, allow_skip, allow_postpone,
+                            postpone_minutes, challenge_text)
