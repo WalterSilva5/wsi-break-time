@@ -27,7 +27,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)  # Mantém rodando no tray
     app.setApplicationName("Wsi Break Time")
-    app.setApplicationVersion("1.0.0")
+    app.setApplicationVersion("1.1.0")
 
     # Import absoluto para funcionar tanto em dev quanto no .exe
     from app import WsiBreakTimeApp
