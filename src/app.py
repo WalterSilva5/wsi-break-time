@@ -218,7 +218,12 @@ class SettingsDialog(QDialog):
 
         # Grupo: Textos de Desafio (captcha para pular)
         challenge_group = QGroupBox("Texto para pular (captcha)")
+
+        self.challenge_enabled_check = QCheckBox("Exigir digitação de texto para pular")
+        self.challenge_enabled_check.setToolTip("Quando ativado, o usuário precisa digitar um texto para pular a pausa")
         challenge_layout = QVBoxLayout()
+
+        challenge_layout.addWidget(self.challenge_enabled_check)
 
         challenge_desc = QLabel("O usuário precisa digitar o texto exibido para pular a pausa.\n"
                                 "Um texto aleatório da lista será selecionado a cada pausa.")
@@ -371,6 +376,7 @@ class SettingsDialog(QDialog):
             self.messages_list.addItem(msg)
 
         # Carrega textos de desafio
+        self.challenge_enabled_check.setChecked(self.settings.skip_challenge_enabled)
         self.challenge_list.clear()
         for text in self.settings.skip_challenge_texts:
             self.challenge_list.addItem(text)
@@ -724,6 +730,7 @@ class SettingsDialog(QDialog):
             self.settings.break_messages.append(self.messages_list.item(i).text())
 
         # Coleta textos de desafio
+        self.settings.skip_challenge_enabled = self.challenge_enabled_check.isChecked()
         self.settings.skip_challenge_texts = []
         for i in range(self.challenge_list.count()):
             self.settings.skip_challenge_texts.append(self.challenge_list.item(i).text())
@@ -778,7 +785,6 @@ class WsiBreakTimeApp:
         self.tray.show_settings_requested.connect(self._show_settings)
         self.tray.pause_requested.connect(self._pause_timer)
         self.tray.resume_requested.connect(self._resume_timer)
-        self.tray.skip_requested.connect(self._skip_break)
         self.tray.take_break_now_requested.connect(self._take_break_now)
         self.tray.quit_requested.connect(self._quit)
 
@@ -881,7 +887,8 @@ class WsiBreakTimeApp:
             allow_skip=self.settings.allow_skip,
             allow_postpone=self.settings.allow_postpone,
             postpone_minutes=self.settings.postpone_minutes,
-            challenge_text=challenge_text
+            challenge_text=challenge_text,
+            challenge_enabled=self.settings.skip_challenge_enabled
         )
         self.overlay.show_fullscreen()
 

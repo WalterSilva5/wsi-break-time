@@ -35,6 +35,7 @@ class AppSettings:
     postpone_minutes: int = 5
     water_reminder_interval: int = 0
     play_sound: bool = False
+    skip_challenge_enabled: bool = True
     skip_challenge_texts: List[str] = field(default_factory=lambda: ["mantenha o foco"])
     todos: List[dict] = field(default_factory=list)  # Lista de TODOs serializados
 

@@ -27,6 +27,7 @@ class BreakOverlay(QWidget):
         self.break_message = "Hora de descansar os olhos!\nOlhe para algo a 6 metros de distância."
         self.break_duration = 20
         self.challenge_text = "mantenha o foco"
+        self.challenge_enabled = True
 
         self._setup_ui()
         self._setup_window()
@@ -159,6 +160,37 @@ class BreakOverlay(QWidget):
 
         layout.addWidget(self.skip_container)
 
+        # Botão Pular simples (quando captcha desabilitado)
+        self.skip_button = QPushButton("Pular")
+        self.skip_button.setFont(QFont("Segoe UI", 12))
+        self.skip_button.setMinimumSize(120, 40)
+        self.skip_button.setStyleSheet("""
+            QPushButton {
+                background-color: #424242;
+                color: white;
+                border: none;
+                border-radius: 20px;
+                padding: 10px 30px;
+            }
+            QPushButton:hover {
+                background-color: #616161;
+            }
+            QPushButton:pressed {
+                background-color: #757575;
+            }
+        """)
+        self.skip_button.clicked.connect(self.skip_requested.emit)
+        self.skip_button.hide()
+        layout.addWidget(self.skip_button, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        # Dica ESC (quando captcha desabilitado)
+        self.esc_tip_label = QLabel("Pressione ESC para pular")
+        self.esc_tip_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.esc_tip_label.setFont(QFont("Segoe UI", 10))
+        self.esc_tip_label.setStyleSheet("color: #505050;")
+        self.esc_tip_label.hide()
+        layout.addWidget(self.esc_tip_label)
+
         # Botão Adiar
         self.postpone_button = QPushButton(f"Adiar {self.postpone_minutes} min")
         self.postpone_button.setFont(QFont("Segoe UI", 12))
@@ -190,7 +222,8 @@ class BreakOverlay(QWidget):
 
     def configure(self, message: str, duration: int, allow_skip: bool,
                   allow_postpone: bool, postpone_minutes: int,
-                  challenge_text: str = "mantenha o foco"):
+                  challenge_text: str = "mantenha o foco",
+                  challenge_enabled: bool = True):
         """Configura o overlay antes de exibir."""
         self.break_message = message
         self.break_duration = duration
@@ -198,12 +231,16 @@ class BreakOverlay(QWidget):
         self.allow_postpone = allow_postpone
         self.postpone_minutes = postpone_minutes
         self.challenge_text = challenge_text
+        self.challenge_enabled = challenge_enabled
 
         self.message_label.setText(message)
         self.progress_bar.setMaximum(duration)
         self.progress_bar.setValue(duration)
 
-        self.skip_container.setVisible(allow_skip)
+        # Captcha ou botão simples
+        self.skip_container.setVisible(allow_skip and challenge_enabled)
+        self.skip_button.setVisible(allow_skip and not challenge_enabled)
+        self.esc_tip_label.setVisible(allow_skip and not challenge_enabled)
         self.challenge_label.setText(challenge_text)
         self.challenge_input.clear()
         self.challenge_error.hide()
@@ -241,8 +278,10 @@ class BreakOverlay(QWidget):
 
     def keyPressEvent(self, event):
         """Trata teclas pressionadas."""
-        # ESC desabilitado - skip requer digitar o texto desafio
-        super().keyPressEvent(event)
+        if event.key() == Qt.Key.Key_Escape and self.allow_skip and not self.challenge_enabled:
+            self.skip_requested.emit()
+        else:
+            super().keyPressEvent(event)
 
 
 class MultiScreenOverlay:
@@ -294,8 +333,9 @@ class MultiScreenOverlay:
 
     def configure_all(self, message: str, duration: int, allow_skip: bool,
                       allow_postpone: bool, postpone_minutes: int,
-                      challenge_text: str = "mantenha o foco"):
+                      challenge_text: str = "mantenha o foco",
+                      challenge_enabled: bool = True):
         """Configura todos os overlays."""
         for overlay in self.overlays:
             overlay.configure(message, duration, allow_skip, allow_postpone,
-                            postpone_minutes, challenge_text)
+                            postpone_minutes, challenge_text, challenge_enabled)

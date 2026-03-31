@@ -103,12 +103,6 @@ class TrayIcon(QObject):
         self.take_break_action.triggered.connect(self.take_break_now_requested.emit)
         self.menu.addAction(self.take_break_action)
 
-        # Pular pausa (só aparece durante a pausa)
-        self.skip_action = QAction("Pular pausa", self.menu)
-        self.skip_action.triggered.connect(self.skip_requested.emit)
-        self.skip_action.setVisible(False)
-        self.menu.addAction(self.skip_action)
-
         self.menu.addSeparator()
 
         # Seção Pomodoro
@@ -197,7 +191,6 @@ class TrayIcon(QObject):
     def set_break_state(self, on_break: bool):
         """Atualiza o estado durante uma pausa."""
         self.is_on_break = on_break
-        self.skip_action.setVisible(on_break)
         self.take_break_action.setVisible(not on_break)
         self.pause_action.setVisible(not on_break)
 
