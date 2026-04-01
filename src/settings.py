@@ -36,7 +36,29 @@ class AppSettings:
     water_reminder_interval: int = 0
     play_sound: bool = False
     skip_challenge_enabled: bool = True
-    skip_challenge_texts: List[str] = field(default_factory=lambda: ["mantenha o foco"])
+    skip_challenge_texts: List[str] = field(default_factory=lambda: [
+        "mantenha o foco",
+        "stay focused on what truly matters right now",
+        "keep working even when you don't feel like it",
+        "focus on the objective and ignore everything else",
+        "maintain discipline even when motivation is gone",
+        "do the work that needs to be done today",
+        "keep moving forward, no matter how slow",
+        "one task at a time, done with full attention",
+        "finish what you started before jumping to something else",
+        "stay consistent, even on days you feel off",
+        "ignore distractions and protect your time at all costs",
+        "keep your head down and execute the plan",
+        "progress comes from action, not from thinking about it",
+        "don't stop now, you're already in motion",
+        "focus beats motivation when things get difficult",
+        "small daily steps lead to big long-term results",
+        "control your time before it controls you",
+        "keep the momentum going, don't break the chain",
+        "show up and do the work, no excuses today",
+        "clarity comes from action, not overthinking",
+        "stay on track, even if things are not perfect",
+    ])
     todos: List[dict] = field(default_factory=list)  # Lista de TODOs serializados
 
     # Configurações do Pomodoro

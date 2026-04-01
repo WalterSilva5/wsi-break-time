@@ -5,7 +5,23 @@
       "Bash(git mv:*)",
       "Bash(rm -f Cargo.lock)",
       "Bash(rm -rf target/)",
-      "Bash(python build.py)"
+      "Bash(python build.py)",
+      "Bash(which python:*)",
+      "Bash(py -3.14 -c \"import PyQt6; print\\('PyQt6 OK'\\)\" 2>&1; py -3.14 -c \"import PyInstaller; print\\('PyInstaller OK'\\)\" 2>&1)",
+      "Bash(/c/Users/wsi/AppData/Local/Programs/Python/Python314/python.exe --version 2>&1 && /c/Users/wsi/AppData/Local/Programs/Python/Python314/python.exe -c \"import PyQt6; print\\('PyQt6 OK'\\)\" 2>&1)",
+      "Bash(cmd.exe //c \"python --version\" 2>&1 && cmd.exe //c \"python -c \\\\\"import PyQt6; print\\('PyQt6 OK'\\)\\\\\"\" 2>&1)",
+      "Bash(PYTHONHOME=/c/Python314 PYTHONPATH=/c/Python314 /c/Python314/python.exe --version 2>&1)",
+      "Bash(PYTHONHOME=/c/Python314 /c/Python314/python.exe -c \"import sys; print\\(sys.path\\)\" 2>&1)",
+      "Bash(find /c -maxdepth 3 -name python.exe)",
+      "Read(//c/Users/wsi/**)",
+      "Bash(/c/Python313/python.exe --version)",
+      "Bash(/c/Python313/python.exe -c \"import PyQt6; print\\('PyQt6 OK'\\)\" 2>&1 && /c/Python313/python.exe -c \"import PyInstaller; print\\('PyInstaller OK'\\)\" 2>&1)",
+      "Bash(/c/Python313/python.exe -m pip install PyQt6 pyinstaller 2>&1)",
+      "Bash(/c/Python313/python.exe build.py 2>&1)",
+      "Bash(rm -rf dist/ 2>&1 && /c/Python313/python.exe build.py 2>&1)",
+      "Bash(tasklist.exe 2>/dev/null | grep -i WsiBreakTime)",
+      "Bash(taskkill.exe /IM WsiBreakTime.exe /F 2>&1)",
+      "Bash(taskkill.exe //IM WsiBreakTime.exe //F 2>&1)"
     ]
   }
 }
