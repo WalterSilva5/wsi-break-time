@@ -21,7 +21,24 @@
       "Bash(rm -rf dist/ 2>&1 && /c/Python313/python.exe build.py 2>&1)",
       "Bash(tasklist.exe 2>/dev/null | grep -i WsiBreakTime)",
       "Bash(taskkill.exe /IM WsiBreakTime.exe /F 2>&1)",
-      "Bash(taskkill.exe //IM WsiBreakTime.exe //F 2>&1)"
+      "Bash(taskkill.exe //IM WsiBreakTime.exe //F 2>&1)",
+      "Bash(/c/Python314/python.exe build.py)",
+      "Bash(cmd //c \"python build.py\")",
+      "Bash(py -3 --version)",
+      "Bash(where.exe python:*)",
+      "Bash(cmd //c \"py -3 build.py\")",
+      "Bash(cmd //c \"set PYTHONHOME=C:\\\\Python314& set PYTHONPATH=& py -3 -c \"\"import sys; print\\(sys.prefix\\); print\\(sys.exec_prefix\\)\"\"\")",
+      "Bash(cmd //c \"where python\")",
+      "Bash(cmd //c \"python -c \"\"import sys; print\\(sys.executable, sys.version\\)\"\"\")",
+      "Bash(cmd //c \"build.bat\")",
+      "Bash(cmd //c \"cd /d C:\\\\Users\\\\wsi\\\\repositorios\\\\github\\\\wsi-break-time && build.bat\")",
+      "Bash(cmd //c \"C:\\\\Users\\\\wsi\\\\repositorios\\\\github\\\\wsi-break-time\\\\build.bat\")",
+      "Bash(cmd //c \"dir C:\\\\Python* /B /AD\")",
+      "Bash(cmd //c \"dir C:\\\\Users\\\\wsi\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\ /B /AD\")",
+      "Bash(cmd //c \"py --list\")",
+      "Bash(cmd //c \"dir C:\\\\Python313\\\\ /B\")",
+      "Bash(cmd //c \"set PATH=C:\\\\Python313;C:\\\\Python313\\\\Scripts;%PATH%&& cd /d C:\\\\Users\\\\wsi\\\\repositorios\\\\github\\\\wsi-break-time && python --version && pip show PyQt6 pyinstaller\")",
+      "Bash(cmd //c \"set PATH=C:\\\\Python313;C:\\\\Python313\\\\Scripts;%PATH%&& cd /d C:\\\\Users\\\\wsi\\\\repositorios\\\\github\\\\wsi-break-time && python -m PyInstaller build.spec --noconfirm\")"
     ]
   }
 }

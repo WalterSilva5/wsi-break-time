@@ -24,18 +24,14 @@ class AppSettings:
     """Configurações da aplicação."""
 
     break_interval: int = 20
-    break_duration: int = 20
+    fixed_message: str = ""
     break_messages: List[str] = field(default_factory=lambda: DEFAULT_MESSAGES.copy())
     start_minimized: bool = True
     start_with_windows: bool = False
     show_pre_notification: bool = True
     pre_notification_seconds: int = 30
-    allow_skip: bool = True
-    allow_postpone: bool = True
-    postpone_minutes: int = 5
     water_reminder_interval: int = 0
     play_sound: bool = False
-    skip_challenge_enabled: bool = True
     skip_challenge_texts: List[str] = field(default_factory=lambda: [
         "mantenha o foco",
         "volte ao trabalho",

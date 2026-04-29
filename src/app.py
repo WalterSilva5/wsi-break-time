@@ -17,7 +17,7 @@ from PyQt6.QtGui import QFont
 from settings import SettingsManager, AppSettings
 from timer_manager import TimerManager
 from tray_icon import TrayIcon
-from overlay import BreakOverlay, MultiScreenOverlay
+from overlay import BreakOverlay, ConfirmToast
 from todo_model import TodoItem, TodoStatus
 from todo_manager import TodoManager
 from pomodoro_manager import PomodoroManager, PomodoroState
@@ -156,13 +156,28 @@ class SettingsDialog(QDialog):
         self.break_interval_spin.setSuffix(" minutos")
         interval_layout.addRow("Pausa a cada:", self.break_interval_spin)
 
-        self.break_duration_spin = QSpinBox()
-        self.break_duration_spin.setRange(5, 300)
-        self.break_duration_spin.setSuffix(" segundos")
-        interval_layout.addRow("Duração da pausa:", self.break_duration_spin)
-
         interval_group.setLayout(interval_layout)
         breaks_layout.addWidget(interval_group)
+
+        # Grupo: Texto fixo da janela
+        fixed_group = QGroupBox("Texto fixo da janela de confirmação")
+        fixed_layout = QVBoxLayout()
+
+        fixed_desc = QLabel("Texto exibido em destaque em toda confirmação de sessão. "
+                            "Máximo 6 linhas (deixe em branco para ocultar).")
+        fixed_desc.setWordWrap(True)
+        fixed_desc.setStyleSheet("color: gray; font-size: 11px;")
+        fixed_layout.addWidget(fixed_desc)
+
+        self.fixed_message_edit = QTextEdit()
+        self.fixed_message_edit.setPlaceholderText("Digite o texto fixo aqui (até 6 linhas)...")
+        self.fixed_message_edit.setMaximumHeight(120)
+        self.fixed_message_edit.setAcceptRichText(False)
+        self.fixed_message_edit.textChanged.connect(self._enforce_fixed_message_limit)
+        fixed_layout.addWidget(self.fixed_message_edit)
+
+        fixed_group.setLayout(fixed_layout)
+        breaks_layout.addWidget(fixed_group)
 
         # Grupo: Próxima Pausa (somente se timer estiver disponível)
         if self.timer_manager:
@@ -198,34 +213,12 @@ class SettingsDialog(QDialog):
         notify_group.setLayout(notify_layout)
         breaks_layout.addWidget(notify_group)
 
-        # Grupo: Controles
-        controls_group = QGroupBox("Controles")
-        controls_layout = QFormLayout()
+        # Grupo: Textos de confirmação de sessão
+        challenge_group = QGroupBox("Textos de confirmação de sessão")
 
-        self.allow_skip_check = QCheckBox("Permitir pular pausas")
-        controls_layout.addRow(self.allow_skip_check)
-
-        self.allow_postpone_check = QCheckBox("Permitir adiar pausas")
-        controls_layout.addRow(self.allow_postpone_check)
-
-        self.postpone_spin = QSpinBox()
-        self.postpone_spin.setRange(1, 30)
-        self.postpone_spin.setSuffix(" minutos")
-        controls_layout.addRow("Tempo de adiamento:", self.postpone_spin)
-
-        controls_group.setLayout(controls_layout)
-        breaks_layout.addWidget(controls_group)
-
-        # Grupo: Textos de Desafio (captcha para pular)
-        challenge_group = QGroupBox("Texto para pular (captcha)")
-
-        self.challenge_enabled_check = QCheckBox("Exigir digitação de texto para pular")
-        self.challenge_enabled_check.setToolTip("Quando ativado, o usuário precisa digitar um texto para pular a pausa")
         challenge_layout = QVBoxLayout()
 
-        challenge_layout.addWidget(self.challenge_enabled_check)
-
-        challenge_desc = QLabel("O usuário precisa digitar o texto exibido para pular a pausa.\n"
+        challenge_desc = QLabel("O usuário precisa digitar o texto exibido para confirmar a sessão.\n"
                                 "Um texto aleatório da lista será selecionado a cada pausa.")
         challenge_desc.setWordWrap(True)
         challenge_desc.setStyleSheet("color: gray; font-size: 11px;")
@@ -359,16 +352,13 @@ class SettingsDialog(QDialog):
     def _load_settings(self):
         """Carrega as configurações atuais."""
         self.break_interval_spin.setValue(self.settings.break_interval)
-        self.break_duration_spin.setValue(self.settings.break_duration)
         self.pre_notify_check.setChecked(self.settings.show_pre_notification)
         self.pre_notify_spin.setValue(self.settings.pre_notification_seconds)
         self.play_sound_check.setChecked(self.settings.play_sound)
-        self.allow_skip_check.setChecked(self.settings.allow_skip)
-        self.allow_postpone_check.setChecked(self.settings.allow_postpone)
-        self.postpone_spin.setValue(self.settings.postpone_minutes)
         self.start_minimized_check.setChecked(self.settings.start_minimized)
         self.start_windows_check.setChecked(self.settings.start_with_windows)
         self.water_reminder_spin.setValue(self.settings.water_reminder_interval)
+        self.fixed_message_edit.setPlainText(self.settings.fixed_message)
 
         # Carrega lista de mensagens
         self.messages_list.clear()
@@ -376,10 +366,23 @@ class SettingsDialog(QDialog):
             self.messages_list.addItem(msg)
 
         # Carrega textos de desafio
-        self.challenge_enabled_check.setChecked(self.settings.skip_challenge_enabled)
         self.challenge_list.clear()
         for text in self.settings.skip_challenge_texts:
             self.challenge_list.addItem(text)
+
+    def _enforce_fixed_message_limit(self):
+        """Limita o texto fixo a no máximo 6 linhas."""
+        text = self.fixed_message_edit.toPlainText()
+        lines = text.split("\n")
+        if len(lines) > 6:
+            cursor = self.fixed_message_edit.textCursor()
+            position = cursor.position()
+            truncated = "\n".join(lines[:6])
+            self.fixed_message_edit.blockSignals(True)
+            self.fixed_message_edit.setPlainText(truncated)
+            cursor.setPosition(min(position, len(truncated)))
+            self.fixed_message_edit.setTextCursor(cursor)
+            self.fixed_message_edit.blockSignals(False)
 
     def _add_message(self):
         """Adiciona uma nova mensagem à lista."""
@@ -713,16 +716,16 @@ class SettingsDialog(QDialog):
     def get_settings(self) -> AppSettings:
         """Retorna as configurações editadas."""
         self.settings.break_interval = self.break_interval_spin.value()
-        self.settings.break_duration = self.break_duration_spin.value()
         self.settings.show_pre_notification = self.pre_notify_check.isChecked()
         self.settings.pre_notification_seconds = self.pre_notify_spin.value()
         self.settings.play_sound = self.play_sound_check.isChecked()
-        self.settings.allow_skip = self.allow_skip_check.isChecked()
-        self.settings.allow_postpone = self.allow_postpone_check.isChecked()
-        self.settings.postpone_minutes = self.postpone_spin.value()
         self.settings.start_minimized = self.start_minimized_check.isChecked()
         self.settings.start_with_windows = self.start_windows_check.isChecked()
         self.settings.water_reminder_interval = self.water_reminder_spin.value()
+
+        # Texto fixo (limita a 6 linhas como salvaguarda)
+        fixed_text = self.fixed_message_edit.toPlainText()
+        self.settings.fixed_message = "\n".join(fixed_text.split("\n")[:6])
 
         # Coleta mensagens da lista
         self.settings.break_messages = []
@@ -730,7 +733,6 @@ class SettingsDialog(QDialog):
             self.settings.break_messages.append(self.messages_list.item(i).text())
 
         # Coleta textos de desafio
-        self.settings.skip_challenge_enabled = self.challenge_enabled_check.isChecked()
         self.settings.skip_challenge_texts = []
         for i in range(self.challenge_list.count()):
             self.settings.skip_challenge_texts.append(self.challenge_list.item(i).text())
@@ -755,7 +757,7 @@ class WsiBreakTimeApp:
         self.timer = TimerManager()
         self.tray = TrayIcon()
         self.overlay = BreakOverlay()
-        self.multi_overlay = MultiScreenOverlay()
+        self.confirm_toast = ConfirmToast()
 
         # TODO Manager
         self.todo_manager = TodoManager()
@@ -777,9 +779,9 @@ class WsiBreakTimeApp:
         # Timer -> App
         self.timer.break_started.connect(self._on_break_started)
         self.timer.break_ended.connect(self._on_break_ended)
-        self.timer.tick.connect(self._on_break_tick)
         self.timer.pre_notification.connect(self._on_pre_notification)
         self.timer.water_reminder.connect(self._on_water_reminder)
+        self.timer.confirmation_reminder.connect(self._on_confirmation_reminder)
 
         # Tray -> App
         self.tray.show_settings_requested.connect(self._show_settings)
@@ -789,8 +791,7 @@ class WsiBreakTimeApp:
         self.tray.quit_requested.connect(self._quit)
 
         # Overlay -> App
-        self.overlay.skip_requested.connect(self._skip_break)
-        self.overlay.postpone_requested.connect(self._postpone_break)
+        self.overlay.confirmed.connect(self._confirm_break)
 
         # TodoManager -> App
         self.todo_manager.todo_due.connect(self._on_todo_due)
@@ -819,7 +820,6 @@ class WsiBreakTimeApp:
         """Aplica as configurações ao timer, overlay e pomodoro."""
         self.timer.configure(
             break_interval=self.settings.break_interval,
-            break_duration=self.settings.break_duration,
             pre_notification_seconds=self.settings.pre_notification_seconds if self.settings.show_pre_notification else 0,
             water_interval=self.settings.water_reminder_interval
         )
@@ -878,28 +878,24 @@ class WsiBreakTimeApp:
         """Chamado quando uma pausa inicia."""
         self.tray.set_break_state(True)
 
-        # Seleciona mensagem aleatória e configura overlay
         random_message = self._get_random_message()
         challenge_text = self._get_random_challenge_text()
         self.overlay.configure(
             message=random_message,
-            duration=self.settings.break_duration,
-            allow_skip=self.settings.allow_skip,
-            allow_postpone=self.settings.allow_postpone,
-            postpone_minutes=self.settings.postpone_minutes,
             challenge_text=challenge_text,
-            challenge_enabled=self.settings.skip_challenge_enabled
+            fixed_message=self.settings.fixed_message,
         )
-        self.overlay.show_fullscreen()
+        self.overlay.show_window()
 
     def _on_break_ended(self):
         """Chamado quando uma pausa termina."""
-        self.overlay.close()
+        self.overlay.hide()
+        self.confirm_toast.hide()
         self.tray.set_break_state(False)
 
-    def _on_break_tick(self, seconds_remaining: int):
-        """Atualiza o contador durante a pausa."""
-        self.overlay.update_countdown(seconds_remaining)
+    def _on_confirmation_reminder(self):
+        """Lembrete a cada 1 minuto enquanto a sessão não é confirmada."""
+        self.confirm_toast.show_toast()
 
     def _on_pre_notification(self, seconds: int):
         """Notifica que a pausa está próxima."""
@@ -954,22 +950,11 @@ class WsiBreakTimeApp:
         self.tray.set_paused_state(False)
         self.status_timer.start()
 
-    def _skip_break(self):
-        """Pula a pausa atual."""
-        self.timer.skip_break()
-        self.overlay.close()
-
-    def _postpone_break(self, minutes: int):
-        """Adia a pausa."""
-        self.timer.postpone_break(minutes)
-        self.overlay.close()
-
-        self.tray.show_notification(
-            "Pausa adiada",
-            f"Próxima pausa em {minutes} minutos.",
-            QSystemTrayIcon.MessageIcon.Information,
-            3000
-        )
+    def _confirm_break(self):
+        """Confirma a sessão e encerra a pausa atual."""
+        self.timer.confirm_break()
+        self.overlay.hide()
+        self.confirm_toast.hide()
 
     def _take_break_now(self):
         """Inicia uma pausa imediatamente."""
@@ -982,7 +967,8 @@ class WsiBreakTimeApp:
         self.timer.stop()
         self.todo_manager.stop()
         self.status_timer.stop()
-        self.overlay.close()
+        self.overlay.force_close()
+        self.confirm_toast.close()
         self.tray.hide()
         QApplication.quit()
 
